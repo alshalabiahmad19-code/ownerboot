@@ -8,21 +8,23 @@ from discord.ext import commands
 import yt_dlp
 
 TOKEN = os.getenv("DISCORD_TOKEN")
-
 OWNER_VOICE_CHANNEL_ID = 1548094091798257806
 GUILD_ID = 1267380491703812107
 
-class HealthHandler(BaseHTTPRequestHandler):
-def do_GET(self):
+def health_response(self):
 self.send_response(200)
 self.send_header("Content-Type", "text/plain")
 self.end_headers()
 self.wfile.write(b"ownerboot is running")
 
-```
-def log_message(self, format, *args):
-    return
-```
+HealthHandler = type(
+"HealthHandler",
+(BaseHTTPRequestHandler,),
+{
+"do_GET": health_response,
+"log_message": lambda self, format, *args: None
+}
+)
 
 def start_health_server():
 port = int(os.getenv("PORT", "10000"))
@@ -46,71 +48,64 @@ async def connect_to_owner_channel():
 await bot.wait_until_ready()
 
 ```
-while not bot.is_closed():
-    try:
-        channel = bot.get_channel(OWNER_VOICE_CHANNEL_ID)
+try:
+    channel = bot.get_channel(OWNER_VOICE_CHANNEL_ID)
 
-        if channel is None:
-            print("Channel not found in cache. Trying fetch_channel...")
-            channel = await bot.fetch_channel(OWNER_VOICE_CHANNEL_ID)
+    if channel is None:
+        print("Channel not in cache, fetching...")
+        channel = await bot.fetch_channel(OWNER_VOICE_CHANNEL_ID)
 
-        print(f"Voice channel found: {channel.name}")
+    print("Found channel:", channel.name)
+    print("Channel ID:", channel.id)
+    print("Guild ID:", channel.guild.id)
 
-        if not isinstance(channel, discord.VoiceChannel):
-            print("ERROR: The ID is not a normal voice channel.")
-            return
-
-        if channel.guild.id != GUILD_ID:
-            print("ERROR: Voice channel is in the wrong server.")
-            return
-
-        voice_client = discord.utils.get(
-            bot.voice_clients,
-            guild=channel.guild
-        )
-
-        if voice_client is None:
-            print("Connecting to owner voice channel...")
-            await channel.connect(self_deaf=True)
-            print("Successfully connected to owner voice channel.")
-
-        elif voice_client.channel.id != channel.id:
-            print("Moving bot to owner voice channel...")
-            await voice_client.move_to(channel)
-            print("Successfully moved to owner voice channel.")
-
-        else:
-            print("Bot is already in the owner voice channel.")
-
+    if channel.guild.id != GUILD_ID:
+        print("ERROR: Wrong server.")
         return
 
-    except discord.Forbidden as e:
-        print("ERROR: Discord denied permission to join the voice channel.")
-        print(e)
+    if not isinstance(channel, discord.VoiceChannel):
+        print("ERROR: This is not a voice channel.")
         return
 
-    except discord.HTTPException as e:
-        print("ERROR: Discord HTTP error while joining voice channel.")
-        print(e)
+    voice = discord.utils.get(
+        bot.voice_clients,
+        guild=channel.guild
+    )
 
-    except Exception as e:
-        print("ERROR while joining voice channel:")
-        print(repr(e))
+    if voice is None:
+        print("Connecting to owner voice channel...")
+        await channel.connect(self_deaf=True)
+        print("SUCCESS: Connected to owner voice channel.")
 
-    await asyncio.sleep(10)
+    elif voice.channel.id != channel.id:
+        print("Moving to owner voice channel...")
+        await voice.move_to(channel)
+        print("SUCCESS: Moved to owner voice channel.")
+
+    else:
+        print("Bot is already inside owner voice channel.")
+
+except discord.Forbidden as e:
+    print("ERROR: Missing Discord permissions.")
+    print(repr(e))
+
+except Exception as e:
+    print("ERROR CONNECTING TO VOICE:")
+    print(repr(e))
 ```
 
 @bot.event
 async def on_ready():
-print("----------------------------------------")
-print(f"Logged in as: {bot.user}")
-print(f"Bot ID: {bot.user.id}")
-print(f"Server ID: {GUILD_ID}")
-print(f"Owner voice channel ID: {OWNER_VOICE_CHANNEL_ID}")
-print("----------------------------------------")
+print("================================")
+print("OWNERBOOT ONLINE")
+print("Bot:", bot.user)
+print("Bot ID:", bot.user.id)
+print("Server ID:", GUILD_ID)
+print("Voice ID:", OWNER_VOICE_CHANNEL_ID)
+print("================================")
 
 ```
-bot.loop.create_task(connect_to_owner_channel())
+await connect_to_owner_channel()
 ```
 
 @bot.event
@@ -133,7 +128,7 @@ if content.startswith("ش "):
         return
 
     if message.author.voice.channel.id != OWNER_VOICE_CHANNEL_ID:
-        await message.reply("أوامر الأغاني تعمل فقط داخل روم الأونرات.")
+        await message.reply("الأوامر تعمل فقط داخل روم الأونرات.")
         return
 
     query = content[2:].strip()
@@ -156,16 +151,13 @@ if content.startswith("ش "):
             await message.reply("البوت لم يستطع دخول روم الأونرات.")
             return
 
-    if voice.channel.id != OWNER_VOICE_CHANNEL_ID:
-        await voice.move_to(message.author.voice.channel)
-
     try:
         ytdl_options = {
             "format": "bestaudio/best",
             "noplaylist": True,
             "quiet": True,
             "default_search": "ytsearch",
-            "source_address": "0.0.0.0",
+            "source_address": "0.0.0.0"
         }
 
         with yt_dlp.YoutubeDL(ytdl_options) as ydl:
@@ -237,6 +229,6 @@ elif content == "وقف":
 ```
 
 if not TOKEN:
-raise RuntimeError("DISCORD_TOKEN environment variable is missing.")
+raise RuntimeError("DISCORD_TOKEN environment variable is missing")
 
 bot.run(TOKEN)
