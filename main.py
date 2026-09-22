@@ -1,34 +1,35 @@
-import asyncio
 import os
+import asyncio
 import threading
-import traceback
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import discord
 from discord.ext import commands
 import yt_dlp
 
+TOKEN = os.getenv("DISCORD_TOKEN")
+
+OWNER_VOICE_CHANNEL_ID = 1548094091798257806
+GUILD_ID = 1267380491703812107
+
 class HealthHandler(BaseHTTPRequestHandler):
 def do_GET(self):
 self.send_response(200)
-self.send_header("Content-Type", "text/plain; charset=utf-8")
+self.send_header("Content-Type", "text/plain")
 self.end_headers()
-self.wfile.write(b"ownerboot is running!")
+self.wfile.write(b"ownerboot is running")
 
 ```
 def log_message(self, format, *args):
-    pass
+    return
 ```
 
-def start_web_server():
+def start_health_server():
 port = int(os.getenv("PORT", "10000"))
 server = HTTPServer(("0.0.0.0", port), HealthHandler)
 server.serve_forever()
 
-threading.Thread(
-target=start_web_server,
-daemon=True
-).start()
+threading.Thread(target=start_health_server, daemon=True).start()
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -37,618 +38,205 @@ intents.guilds = True
 
 bot = commands.Bot(
 command_prefix="!",
-intents=intents
+intents=intents,
+help_command=None
 )
 
-OWNER_SERVER_ID = 1267380491703812107
-OWNER_VOICE_CHANNEL_ID = 1548094091798257806
-
-queues = {}
-
-YTDL_OPTIONS = {
-"format": "bestaudio/best",
-"noplaylist": True,
-"quiet": True,
-"no_warnings": True,
-"default_search": "ytsearch1",
-"source_address": "0.0.0.0",
-}
-
-FFMPEG_OPTIONS = {
-"before_options": (
-"-reconnect 1 "
-"-reconnect_streamed 1 "
-"-reconnect_delay_max 5"
-),
-"options": "-vn",
-}
-
-ytdl = yt_dlp.YoutubeDL(YTDL_OPTIONS)
-
-class YouTubeSource(discord.PCMVolumeTransformer):
+async def connect_to_owner_channel():
+await bot.wait_until_ready()
 
 ```
-def __init__(self, source, *, data):
-    super().__init__(source, volume=0.5)
-    self.data = data
-    self.title = data.get("title", "Unknown")
-
-@classmethod
-async def from_query(cls, query):
-
-    loop = asyncio.get_running_loop()
-
-    def extract():
-        data = ytdl.extract_info(
-            query,
-            download=False
-        )
-
-        if not data:
-            raise RuntimeError(
-                "YouTube لم يرجع نتيجة."
-            )
-
-        if "entries" in data:
-            entries = [
-                item for item in data["entries"]
-                if item
-            ]
-
-            if not entries:
-                raise RuntimeError(
-                    "لم يتم العثور على الأغنية."
-                )
-
-            data = entries[0]
-
-        return data
-
-    data = await loop.run_in_executor(
-        None,
-        extract
-    )
-
-    url = data.get("url")
-
-    if not url:
-        raise RuntimeError(
-            "لم يتم الحصول على رابط الصوت."
-        )
-
-    ffmpeg = os.getenv(
-        "FFMPEG_PATH",
-        "ffmpeg"
-    )
-
-    source = discord.FFmpegPCMAudio(
-        url,
-        executable=ffmpeg,
-        **FFMPEG_OPTIONS
-    )
-
-    return cls(
-        source,
-        data=data
-    )
-```
-
-async def get_owner_channel(guild):
-
-```
-if guild.id != OWNER_SERVER_ID:
-    print(
-        f"[VOICE] Wrong guild: {guild.id}"
-    )
-    return None
-
-print(
-    f"[VOICE] Looking for channel "
-    f"{OWNER_VOICE_CHANNEL_ID}"
-)
-
-channel = guild.get_channel(
-    OWNER_VOICE_CHANNEL_ID
-)
-
-if channel is None:
-
-    print(
-        "[VOICE] Channel not in cache. "
-        "Fetching from Discord..."
-    )
-
+while not bot.is_closed():
     try:
-        channel = await bot.fetch_channel(
-            OWNER_VOICE_CHANNEL_ID
+        channel = bot.get_channel(OWNER_VOICE_CHANNEL_ID)
+
+        if channel is None:
+            print("Channel not found in cache. Trying fetch_channel...")
+            channel = await bot.fetch_channel(OWNER_VOICE_CHANNEL_ID)
+
+        print(f"Voice channel found: {channel.name}")
+
+        if not isinstance(channel, discord.VoiceChannel):
+            print("ERROR: The ID is not a normal voice channel.")
+            return
+
+        if channel.guild.id != GUILD_ID:
+            print("ERROR: Voice channel is in the wrong server.")
+            return
+
+        voice_client = discord.utils.get(
+            bot.voice_clients,
+            guild=channel.guild
         )
+
+        if voice_client is None:
+            print("Connecting to owner voice channel...")
+            await channel.connect(self_deaf=True)
+            print("Successfully connected to owner voice channel.")
+
+        elif voice_client.channel.id != channel.id:
+            print("Moving bot to owner voice channel...")
+            await voice_client.move_to(channel)
+            print("Successfully moved to owner voice channel.")
+
+        else:
+            print("Bot is already in the owner voice channel.")
+
+        return
+
+    except discord.Forbidden as e:
+        print("ERROR: Discord denied permission to join the voice channel.")
+        print(e)
+        return
+
+    except discord.HTTPException as e:
+        print("ERROR: Discord HTTP error while joining voice channel.")
+        print(e)
 
     except Exception as e:
+        print("ERROR while joining voice channel:")
+        print(repr(e))
 
-        print(
-            f"[VOICE] Fetch failed: "
-            f"{type(e).__name__}: {e}"
-        )
-
-        traceback.print_exc()
-
-        return None
-
-print(
-    f"[VOICE] Found channel: "
-    f"{channel.name} "
-    f"({channel.id}) "
-    f"type={channel.type}"
-)
-
-if not isinstance(
-    channel,
-    discord.VoiceChannel
-):
-
-    print(
-        "[VOICE] Channel is not a normal "
-        "voice channel."
-    )
-
-    return None
-
-return channel
-```
-
-async def connect_owner(guild):
-
-```
-print(
-    f"[VOICE] Connection requested "
-    f"for guild {guild.id}"
-)
-
-if guild.id != OWNER_SERVER_ID:
-    return None
-
-channel = await get_owner_channel(
-    guild
-)
-
-if channel is None:
-
-    print(
-        "[VOICE] Owner voice channel "
-        "could not be found."
-    )
-
-    return None
-
-voice = guild.voice_client
-
-try:
-
-    if voice and voice.is_connected():
-
-        print(
-            f"[VOICE] Already connected to "
-            f"{voice.channel.name}"
-        )
-
-        if voice.channel.id != channel.id:
-
-            print(
-                "[VOICE] Moving to owner channel..."
-            )
-
-            await voice.move_to(channel)
-
-        return voice
-
-    print(
-        "[VOICE] Connecting to owner channel..."
-    )
-
-    voice = await channel.connect(
-        reconnect=True,
-        timeout=30
-    )
-
-    print(
-        f"[VOICE] SUCCESS: Connected to "
-        f"{channel.name}"
-    )
-
-    return voice
-
-except Exception as e:
-
-    print(
-        "[VOICE] VOICE CONNECTION FAILED"
-    )
-
-    print(
-        f"[VOICE] Error type: "
-        f"{type(e).__name__}"
-    )
-
-    print(
-        f"[VOICE] Error: {e}"
-    )
-
-    traceback.print_exc()
-
-    return None
-```
-
-def user_in_owner_channel(message):
-
-```
-if not message.author.voice:
-    return False
-
-return (
-    message.author.voice.channel.id
-    == OWNER_VOICE_CHANNEL_ID
-)
-```
-
-def get_queue(guild_id):
-
-```
-return queues.setdefault(
-    guild_id,
-    []
-)
-```
-
-async def play_next(
-guild,
-text_channel
-):
-
-```
-queue = get_queue(
-    guild.id
-)
-
-voice = guild.voice_client
-
-if not queue:
-    return
-
-if not voice:
-    return
-
-if not voice.is_connected():
-    return
-
-query = queue.pop(0)
-
-try:
-
-    player = await YouTubeSource.from_query(
-        query
-    )
-
-    def finished(error):
-
-        if error:
-            print(
-                f"[FFMPEG] Error: {error}"
-            )
-
-        asyncio.run_coroutine_threadsafe(
-            play_next(
-                guild,
-                text_channel
-            ),
-            bot.loop
-        )
-
-    voice.play(
-        player,
-        after=finished
-    )
-
-    await text_channel.send(
-        f"🎵 **تشغيل التالي:** "
-        f"`{player.title}`"
-    )
-
-except Exception as e:
-
-    print(
-        f"[PLAY NEXT] "
-        f"{type(e).__name__}: {e}"
-    )
-
-    traceback.print_exc()
-
-    await text_channel.send(
-        "❌ تعذر تشغيل الأغنية."
-    )
-
-    if queue:
-        await play_next(
-            guild,
-            text_channel
-        )
+    await asyncio.sleep(10)
 ```
 
 @bot.event
 async def on_ready():
+print("----------------------------------------")
+print(f"Logged in as: {bot.user}")
+print(f"Bot ID: {bot.user.id}")
+print(f"Server ID: {GUILD_ID}")
+print(f"Owner voice channel ID: {OWNER_VOICE_CHANNEL_ID}")
+print("----------------------------------------")
 
 ```
-print(
-    "========================================"
-)
-
-print(
-    f"✅ ownerboot logged in as {bot.user}"
-)
-
-print(
-    f"✅ Bot ID: {bot.user.id}"
-)
-
-print(
-    f"✅ Connected guilds: {len(bot.guilds)}"
-)
-
-print(
-    f"👑 Server ID: {OWNER_SERVER_ID}"
-)
-
-print(
-    f"👑 Voice Channel ID: "
-    f"{OWNER_VOICE_CHANNEL_ID}"
-)
-
-print(
-    "========================================"
-)
-
-guild = bot.get_guild(
-    OWNER_SERVER_ID
-)
-
-if guild is None:
-
-    print(
-        "[READY] Owner server was not found."
-    )
-
-    return
-
-print(
-    f"[READY] Owner server found: "
-    f"{guild.name}"
-)
-
-await connect_owner(
-    guild
-)
-```
-
-@bot.event
-async def on_voice_state_update(
-member,
-before,
-after
-):
-
-```
-if not bot.user:
-    return
-
-if member.id != bot.user.id:
-    return
-
-if member.guild.id != OWNER_SERVER_ID:
-    return
-
-print(
-    f"[VOICE STATE] "
-    f"Before: {before.channel} | "
-    f"After: {after.channel}"
-)
-
-if (
-    after.channel is None
-    or after.channel.id != OWNER_VOICE_CHANNEL_ID
-):
-
-    await asyncio.sleep(2)
-
-    await connect_owner(
-        member.guild
-    )
+bot.loop.create_task(connect_to_owner_channel())
 ```
 
 @bot.event
 async def on_message(message):
+if message.author.bot:
+return
 
 ```
-if message.author.bot:
+if message.guild is None:
+    return
+
+if message.guild.id != GUILD_ID:
     return
 
 content = message.content.strip()
 
 if content.startswith("ش "):
+    if not message.author.voice:
+        await message.reply("لازم تكون داخل روم الأونرات.")
+        return
 
-    print(
-        f"[COMMAND] Play requested by "
-        f"{message.author}"
-    )
+    if message.author.voice.channel.id != OWNER_VOICE_CHANNEL_ID:
+        await message.reply("أوامر الأغاني تعمل فقط داخل روم الأونرات.")
+        return
 
     query = content[2:].strip()
 
     if not query:
-
-        await message.channel.send(
-            "❌ اكتب اسم الأغنية.\n"
-            "مثال: `ش Faded`"
-        )
-
+        await message.reply("اكتب اسم الأغنية بعد ش.")
         return
 
-    if not user_in_owner_channel(message):
-
-        print(
-            "[COMMAND] User is not in "
-            "owner voice channel."
-        )
-
-        await message.channel.send(
-            "🔒 لازم تكون داخل روم الأونرات "
-            "حتى تستخدم البوت."
-        )
-
-        return
-
-    print(
-        "[COMMAND] User is in owner "
-        "voice channel."
+    voice = discord.utils.get(
+        bot.voice_clients,
+        guild=message.guild
     )
 
-    voice = await connect_owner(
-        message.guild
-    )
+    if voice is None:
+        try:
+            channel = await bot.fetch_channel(OWNER_VOICE_CHANNEL_ID)
+            voice = await channel.connect(self_deaf=True)
+        except Exception as e:
+            print("VOICE CONNECT ERROR:", repr(e))
+            await message.reply("البوت لم يستطع دخول روم الأونرات.")
+            return
 
-    if not voice:
-
-        await message.channel.send(
-            "❌ البوت لم يستطع دخول روم الأونرات."
-        )
-
-        return
-
-    queue = get_queue(
-        message.guild.id
-    )
-
-    if (
-        voice.is_playing()
-        or voice.is_paused()
-    ):
-
-        queue.append(query)
-
-        await message.channel.send(
-            f"📝 تمت إضافة `{query}` إلى القائمة."
-        )
-
-        return
+    if voice.channel.id != OWNER_VOICE_CHANNEL_ID:
+        await voice.move_to(message.author.voice.channel)
 
     try:
+        ytdl_options = {
+            "format": "bestaudio/best",
+            "noplaylist": True,
+            "quiet": True,
+            "default_search": "ytsearch",
+            "source_address": "0.0.0.0",
+        }
 
-        async with message.channel.typing():
+        with yt_dlp.YoutubeDL(ytdl_options) as ydl:
+            info = ydl.extract_info(query, download=False)
 
-            player = await YouTubeSource.from_query(
-                query
-            )
+        if "entries" in info:
+            info = info["entries"][0]
 
-        def finished(error):
+        audio_url = info["url"]
+        title = info.get("title", "Unknown")
 
-            if error:
-                print(
-                    f"[FFMPEG] Error: {error}"
-                )
+        if voice.is_playing():
+            voice.stop()
 
-            asyncio.run_coroutine_threadsafe(
-                play_next(
-                    message.guild,
-                    message.channel
-                ),
-                bot.loop
-            )
-
-        voice.play(
-            player,
-            after=finished
+        source = discord.FFmpegPCMAudio(
+            audio_url,
+            before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5",
+            options="-vn"
         )
 
-        await message.channel.send(
-            f"🎵 **جاري التشغيل:** "
-            f"`{player.title}`"
-        )
+        voice.play(source)
+
+        await message.reply(f"▶️ شغلت: **{title}**")
 
     except Exception as e:
-
-        print(
-            f"[PLAY] Error: "
-            f"{type(e).__name__}: {e}"
-        )
-
-        traceback.print_exc()
-
-        await message.channel.send(
-            "❌ صار خطأ أثناء تحميل الأغنية."
-        )
+        print("PLAY ERROR:", repr(e))
+        await message.reply("صار خطأ أثناء تشغيل الأغنية.")
 
 elif content == "س":
-
-    if not user_in_owner_channel(message):
+    if not message.author.voice:
+        await message.reply("لازم تكون داخل روم الأونرات.")
         return
 
-    voice = message.guild.voice_client
+    if message.author.voice.channel.id != OWNER_VOICE_CHANNEL_ID:
+        await message.reply("الأمر يعمل فقط داخل روم الأونرات.")
+        return
+
+    voice = discord.utils.get(
+        bot.voice_clients,
+        guild=message.guild
+    )
 
     if voice and voice.is_playing():
-
         voice.stop()
-
-        await message.channel.send(
-            "⏭️ تم تخطي الأغنية."
-        )
-
+        await message.reply("⏭️ تم تخطي الأغنية.")
     else:
-
-        await message.channel.send(
-            "❌ لا توجد أغنية تعمل."
-        )
+        await message.reply("ما في أغنية شغالة.")
 
 elif content == "وقف":
-
-    if not user_in_owner_channel(message):
+    if not message.author.voice:
+        await message.reply("لازم تكون داخل روم الأونرات.")
         return
 
-    queue = get_queue(
-        message.guild.id
+    if message.author.voice.channel.id != OWNER_VOICE_CHANNEL_ID:
+        await message.reply("الأمر يعمل فقط داخل روم الأونرات.")
+        return
+
+    voice = discord.utils.get(
+        bot.voice_clients,
+        guild=message.guild
     )
 
-    queue.clear()
+    if voice:
+        if voice.is_playing():
+            voice.stop()
 
-    voice = message.guild.voice_client
-
-    if voice and (
-        voice.is_playing()
-        or voice.is_paused()
-    ):
-
-        voice.stop()
-
-    await message.channel.send(
-        "🛑 تم إيقاف الأغنية ومسح القائمة."
-    )
-
-await bot.process_commands(
-    message
-)
+        await voice.disconnect()
+        await message.reply("⏹️ تم إيقاف الأغنية وخروج البوت من الروم.")
 ```
 
-token = os.getenv(
-"DISCORD_TOKEN"
-)
+if not TOKEN:
+raise RuntimeError("DISCORD_TOKEN environment variable is missing.")
 
-if not token:
-
-```
-raise RuntimeError(
-    "DISCORD_TOKEN غير موجود."
-)
-```
-
-print(
-"🚀 Starting ownerboot..."
-)
-
-bot.run(
-token
-)
+bot.run(TOKEN)
