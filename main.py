@@ -1,4 +1,3 @@
-```python
 import asyncio
 import os
 import threading
@@ -10,14 +9,14 @@ import yt_dlp
 
 
 # =========================
-# Render health check
+# Render Health Check
 # =========================
 
 class HealthHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(b"OwnerBot is running!")
+        self.wfile.write(b"ownerboot is running!")
 
     def log_message(self, format, *args):
         pass
@@ -51,18 +50,16 @@ bot = commands.Bot(
 
 
 # =========================
-# Owner voice channel
+# Owner Voice Channel
 # =========================
 
 OWNER_VOICE_CHANNEL_ID = 1548094091798257806
 
-
-# Queue per server
 queues = {}
 
 
 # =========================
-# YouTube
+# YouTube / FFmpeg
 # =========================
 
 YTDL_OPTIONS = {
@@ -91,10 +88,7 @@ class YouTubeSource(discord.PCMVolumeTransformer):
     def __init__(self, source, *, data):
         super().__init__(source, volume=0.5)
         self.data = data
-        self.title = data.get(
-            "title",
-            "Unknown"
-        )
+        self.title = data.get("title", "Unknown")
 
     @classmethod
     async def from_query(cls, query):
@@ -102,7 +96,6 @@ class YouTubeSource(discord.PCMVolumeTransformer):
         loop = asyncio.get_running_loop()
 
         def extract():
-
             data = ytdl.extract_info(
                 query,
                 download=False
@@ -114,7 +107,6 @@ class YouTubeSource(discord.PCMVolumeTransformer):
                 )
 
             if "entries" in data:
-
                 entries = [
                     x for x in data["entries"]
                     if x
@@ -159,7 +151,7 @@ class YouTubeSource(discord.PCMVolumeTransformer):
 
 
 # =========================
-# Voice
+# Voice Functions
 # =========================
 
 def get_owner_channel(guild):
@@ -168,10 +160,7 @@ def get_owner_channel(guild):
         OWNER_VOICE_CHANNEL_ID
     )
 
-    if isinstance(
-        channel,
-        discord.VoiceChannel
-    ):
+    if isinstance(channel, discord.VoiceChannel):
         return channel
 
     return None
@@ -183,7 +172,7 @@ async def connect_owner(guild):
 
     if channel is None:
         print(
-            f"❌ Owner voice channel "
+            f"Owner voice channel "
             f"{OWNER_VOICE_CHANNEL_ID} "
             f"was not found."
         )
@@ -207,7 +196,7 @@ async def connect_owner(guild):
     except Exception as e:
 
         print(
-            f"❌ Voice connection error: "
+            f"Voice connection error: "
             f"{type(e).__name__}: {e}"
         )
 
@@ -219,10 +208,9 @@ def user_in_owner_channel(message):
     if not message.author.voice:
         return False
 
-    channel = message.author.voice.channel
-
     return (
-        channel.id == OWNER_VOICE_CHANNEL_ID
+        message.author.voice.channel.id
+        == OWNER_VOICE_CHANNEL_ID
     )
 
 
@@ -238,10 +226,7 @@ def get_queue(guild_id):
     )
 
 
-async def play_next(
-    guild,
-    text_channel
-):
+async def play_next(guild, text_channel):
 
     queue = get_queue(guild.id)
 
@@ -308,14 +293,14 @@ async def play_next(
 
 
 # =========================
-# Ready
+# Bot Ready
 # =========================
 
 @bot.event
 async def on_ready():
 
     print(
-        f"✅ OwnerBot logged in as "
+        f"✅ ownerboot logged in as "
         f"{bot.user}"
     )
 
@@ -329,7 +314,7 @@ async def on_ready():
 
 
 # =========================
-# Keep bot in Owner room
+# Keep Bot In Owner Room
 # =========================
 
 @bot.event
@@ -526,18 +511,14 @@ async def on_message(message):
 
 
 # =========================
-# Start
+# Start Bot
 # =========================
 
-token = os.getenv(
-    "DISCORD_TOKEN"
-)
+token = os.getenv("DISCORD_TOKEN")
 
 if not token:
-
     raise RuntimeError(
         "DISCORD_TOKEN غير موجود."
     )
 
 bot.run(token)
-```
