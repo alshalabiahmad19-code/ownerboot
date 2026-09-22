@@ -8,21 +8,14 @@ import discord
 from discord.ext import commands
 import yt_dlp
 
-# =========================================================
-
-# Render Health Check
-
-# =========================================================
-
 class HealthHandler(BaseHTTPRequestHandler):
+def do_GET(self):
+self.send_response(200)
+self.send_header("Content-Type", "text/plain; charset=utf-8")
+self.end_headers()
+self.wfile.write(b"ownerboot is running!")
 
 ```
-def do_GET(self):
-    self.send_response(200)
-    self.send_header("Content-Type", "text/plain; charset=utf-8")
-    self.end_headers()
-    self.wfile.write(b"ownerboot is running!")
-
 def log_message(self, format, *args):
     pass
 ```
@@ -37,12 +30,6 @@ target=start_web_server,
 daemon=True
 ).start()
 
-# =========================================================
-
-# Discord
-
-# =========================================================
-
 intents = discord.Intents.default()
 intents.message_content = True
 intents.voice_states = True
@@ -53,22 +40,10 @@ command_prefix="!",
 intents=intents
 )
 
-# =========================================================
-
-# Configuration
-
-# =========================================================
-
 OWNER_SERVER_ID = 1267380491703812107
 OWNER_VOICE_CHANNEL_ID = 1548094091798257806
 
 queues = {}
-
-# =========================================================
-
-# YouTube
-
-# =========================================================
 
 YTDL_OPTIONS = {
 "format": "bestaudio/best",
@@ -158,19 +133,12 @@ async def from_query(cls, query):
     )
 ```
 
-# =========================================================
-
-# Find Owner Voice Channel
-
-# =========================================================
-
 async def get_owner_channel(guild):
 
 ```
 if guild.id != OWNER_SERVER_ID:
     print(
-        f"[VOICE] Ignoring guild: "
-        f"{guild.name} ({guild.id})"
+        f"[VOICE] Wrong guild: {guild.id}"
     )
     return None
 
@@ -183,13 +151,8 @@ channel = guild.get_channel(
     OWNER_VOICE_CHANNEL_ID
 )
 
-if channel is not None:
-    print(
-        f"[VOICE] Cached channel found: "
-        f"{channel.name} | "
-        f"type={channel.type}"
-    )
-else:
+if channel is None:
+
     print(
         "[VOICE] Channel not in cache. "
         "Fetching from Discord..."
@@ -200,36 +163,32 @@ else:
             OWNER_VOICE_CHANNEL_ID
         )
 
-        print(
-            f"[VOICE] Fetched channel: "
-            f"{channel.name} | "
-            f"type={channel.type}"
-        )
-
     except Exception as e:
 
         print(
-            "[VOICE] FAILED TO FETCH CHANNEL"
-        )
-
-        print(
-            f"[VOICE] {type(e).__name__}: {e}"
+            f"[VOICE] Fetch failed: "
+            f"{type(e).__name__}: {e}"
         )
 
         traceback.print_exc()
 
         return None
 
-if not isinstance(channel, discord.VoiceChannel):
+print(
+    f"[VOICE] Found channel: "
+    f"{channel.name} "
+    f"({channel.id}) "
+    f"type={channel.type}"
+)
+
+if not isinstance(
+    channel,
+    discord.VoiceChannel
+):
 
     print(
-        f"[VOICE] ERROR: Channel is not a "
-        f"normal voice channel."
-    )
-
-    print(
-        f"[VOICE] Channel type: "
-        f"{type(channel).__name__}"
+        "[VOICE] Channel is not a normal "
+        "voice channel."
     )
 
     return None
@@ -237,26 +196,15 @@ if not isinstance(channel, discord.VoiceChannel):
 return channel
 ```
 
-# =========================================================
-
-# Connect To Owner Voice
-
-# =========================================================
-
 async def connect_owner(guild):
 
 ```
 print(
-    f"[VOICE] Connection requested in guild "
-    f"{guild.id}"
+    f"[VOICE] Connection requested "
+    f"for guild {guild.id}"
 )
 
 if guild.id != OWNER_SERVER_ID:
-
-    print(
-        "[VOICE] Wrong guild. Connection cancelled."
-    )
-
     return None
 
 channel = await get_owner_channel(
@@ -272,11 +220,6 @@ if channel is None:
 
     return None
 
-print(
-    f"[VOICE] Target channel: "
-    f"{channel.name} ({channel.id})"
-)
-
 voice = guild.voice_client
 
 try:
@@ -284,14 +227,14 @@ try:
     if voice and voice.is_connected():
 
         print(
-            f"[VOICE] Bot already connected to: "
+            f"[VOICE] Already connected to "
             f"{voice.channel.name}"
         )
 
         if voice.channel.id != channel.id:
 
             print(
-                "[VOICE] Moving bot to owner channel..."
+                "[VOICE] Moving to owner channel..."
             )
 
             await voice.move_to(channel)
@@ -299,11 +242,7 @@ try:
         return voice
 
     print(
-        "[VOICE] Bot is not connected."
-    )
-
-    print(
-        "[VOICE] Attempting to connect..."
+        "[VOICE] Connecting to owner channel..."
     )
 
     voice = await channel.connect(
@@ -321,23 +260,16 @@ try:
 except Exception as e:
 
     print(
-        "[VOICE] ==============================="
-    )
-
-    print(
         "[VOICE] VOICE CONNECTION FAILED"
     )
 
     print(
-        f"[VOICE] Error type: {type(e).__name__}"
+        f"[VOICE] Error type: "
+        f"{type(e).__name__}"
     )
 
     print(
         f"[VOICE] Error: {e}"
-    )
-
-    print(
-        "[VOICE] ==============================="
     )
 
     traceback.print_exc()
@@ -345,30 +277,17 @@ except Exception as e:
     return None
 ```
 
-# =========================================================
-
-# Check User Voice Channel
-
-# =========================================================
-
 def user_in_owner_channel(message):
 
 ```
 if not message.author.voice:
     return False
 
-channel = message.author.voice.channel
-
 return (
-    channel.id == OWNER_VOICE_CHANNEL_ID
+    message.author.voice.channel.id
+    == OWNER_VOICE_CHANNEL_ID
 )
 ```
-
-# =========================================================
-
-# Queue
-
-# =========================================================
 
 def get_queue(guild_id):
 
@@ -453,12 +372,6 @@ except Exception as e:
         )
 ```
 
-# =========================================================
-
-# Ready
-
-# =========================================================
-
 @bot.event
 async def on_ready():
 
@@ -499,7 +412,7 @@ guild = bot.get_guild(
 if guild is None:
 
     print(
-        "[READY] ERROR: Owner server was not found."
+        "[READY] Owner server was not found."
     )
 
     return
@@ -513,12 +426,6 @@ await connect_owner(
     guild
 )
 ```
-
-# =========================================================
-
-# Keep Bot In Owner Room
-
-# =========================================================
 
 @bot.event
 async def on_voice_state_update(
@@ -555,12 +462,6 @@ if (
     )
 ```
 
-# =========================================================
-
-# Messages
-
-# =========================================================
-
 @bot.event
 async def on_message(message):
 
@@ -570,16 +471,11 @@ if message.author.bot:
 
 content = message.content.strip()
 
-# =====================================================
-# Play
-# =====================================================
-
 if content.startswith("ش "):
 
     print(
         f"[COMMAND] Play requested by "
-        f"{message.author} "
-        f"in guild {message.guild.id}"
+        f"{message.author}"
     )
 
     query = content[2:].strip()
@@ -596,7 +492,8 @@ if content.startswith("ش "):
     if not user_in_owner_channel(message):
 
         print(
-            "[COMMAND] User is not in owner voice channel."
+            "[COMMAND] User is not in "
+            "owner voice channel."
         )
 
         await message.channel.send(
@@ -607,7 +504,8 @@ if content.startswith("ش "):
         return
 
     print(
-        "[COMMAND] User is in owner voice channel."
+        "[COMMAND] User is in owner "
+        "voice channel."
     )
 
     voice = await connect_owner(
@@ -685,10 +583,6 @@ if content.startswith("ش "):
             "❌ صار خطأ أثناء تحميل الأغنية."
         )
 
-# =====================================================
-# Skip
-# =====================================================
-
 elif content == "س":
 
     if not user_in_owner_channel(message):
@@ -709,10 +603,6 @@ elif content == "س":
         await message.channel.send(
             "❌ لا توجد أغنية تعمل."
         )
-
-# =====================================================
-# Stop
-# =====================================================
 
 elif content == "وقف":
 
@@ -742,12 +632,6 @@ await bot.process_commands(
     message
 )
 ```
-
-# =========================================================
-
-# Start
-
-# =========================================================
 
 token = os.getenv(
 "DISCORD_TOKEN"
